@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"github.com/indranandjha1993/go-compose-api/storage"
 	"os"
 	"os/signal"
 	"syscall"
@@ -12,7 +14,8 @@ import (
 )
 
 const (
-	apiServerAddrFlagName string = "addr"
+	apiServerAddrFlagName       string = "addr"
+	apiServerStorageDatabaseURL string = "database-url"
 )
 
 func main() {
@@ -37,6 +40,7 @@ func apiServerCmd() *cli.Command {
 		Usage: "starts the API server",
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: apiServerAddrFlagName, EnvVars: []string{"API_SERVER_ADDR"}},
+			&cli.StringFlag{Name: apiServerStorageDatabaseURL, EnvVars: []string{"DATABASE_URL"}},
 		},
 		Action: func(c *cli.Context) error {
 			done := make(chan os.Signal, 1)
@@ -48,8 +52,14 @@ func apiServerCmd() *cli.Command {
 				close(stopper)
 			}()
 
+			databaseURL := c.String(apiServerStorageDatabaseURL)
+			s, err := storage.NewStorage(databaseURL)
+			if err != nil {
+				return fmt.Errorf("could not initialize storage: %w", err)
+			}
+
 			addr := c.String(apiServerAddrFlagName)
-			server, err := apiserver.NewAPIServer(addr)
+			server, err := apiserver.NewAPIServer(addr, s)
 			if err != nil {
 				return err
 			}

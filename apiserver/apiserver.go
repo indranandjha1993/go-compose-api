@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"errors"
+	"github.com/indranandjha1993/go-compose-api/storage"
 	"net/http"
 	"time"
 
@@ -13,16 +14,32 @@ import (
 var defaultStopTimeout = time.Second * 30
 
 type APIServer struct {
-	addr string
+	addr    string
+	storage *storage.Storage
 }
 
-func NewAPIServer(addr string) (*APIServer, error) {
+type Endpoint struct {
+	handler EndpointFunc
+}
+
+type EndpointFunc func(w http.ResponseWriter, req *http.Request) error
+
+func (e Endpoint) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	if err := e.handler(w, req); err != nil {
+		logrus.WithError(err).Error("could not process request")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("internal server error"))
+	}
+}
+
+func NewAPIServer(addr string, storage *storage.Storage) (*APIServer, error) {
 	if addr == "" {
 		return nil, errors.New("addr cannot be blank")
 	}
 
 	return &APIServer{
-		addr: addr,
+		addr:    addr,
+		storage: storage,
 	}, nil
 }
 
@@ -52,6 +69,8 @@ func (s *APIServer) router() http.Handler {
 	router := mux.NewRouter()
 
 	router.HandleFunc("/", s.defaultRoute)
+	router.Methods("POST").Path("/items").Handler(Endpoint{s.createItem})
+	router.Methods("GET").Path("/items").Handler(Endpoint{s.listItems})
 	return router
 }
 
